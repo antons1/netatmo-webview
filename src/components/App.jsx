@@ -1,6 +1,7 @@
 import React, { Component } from 'react';
 
 import { callNetatmo } from '../utilities/index';
+import { db } from '../utilities/firebase';
 
 class App extends Component {
     constructor(props) {
@@ -14,14 +15,6 @@ class App extends Component {
         this.state = {
             username: "",
             password: "",
-            client_id: "5c405a3fd6e33f11008b4e8e",
-            client_secret: "P77Cmy7ZkjU9LRtf1mDuqfOsx2Hq6vbGt",
-            scope: "read_station",
-            access_token: "",
-            refresh_token: "",
-            device_id: "70:ee:50:39:f6:7e",
-            access_token_time: 0,
-            access_token_timeout: 0,
             error: "",
             data: {},
             notice: "",
@@ -29,70 +22,86 @@ class App extends Component {
         }
     }
 
+    componentDidMount() {
+        db.ref('settings').once('value').then((data) => {
+            this.setState(data.val());
+        })
+    }
+
     onChangePw(event) {this.setState({password: event.target.value});}
     onChangeUn(event) {this.setState({username: event.target.value});}
     submitForm(event) {
-        const { username, password, access_token, refresh_token, access_token_time, access_token_timeout } = this.state;
-        if (username === "" && password === "" && access_token === "") {
-            this.setState({ error: "You need to specify a username and password "});
-            return;
-        }
+        db.ref('settings').once('value').then((data) => {
+            const { client_id, client_secret, device_id, scope } = data.val();
+            db.ref('access').once('value').then((data) => {
+                const { access_token, refresh_token, access_token_time, access_token_timeout } = data.val() || {};
+                const { username, password } = this.state;
+            
+                if (!username && !password && !access_token) {
+                    this.setState({ error: "You need to specify a username and password "});
+                    return;
+                }
 
-        if (access_token === "" && refresh_token === "") {
-            // Log in with username and password
-            this.setState({ notice: "Logging in with username and password" })
-            callNetatmo("https://api.netatmo.com/oauth2/token", {
-                username,
-                password,
-                client_id: this.state.client_id,
-                client_secret: this.state.client_secret,
-                grant_type: "password",
-                scope: this.state.scope
-            }, true).then((data) => this.setState({
-                access_token: data.access_token,
-                refresh_token: data.refresh_token,
-                access_token_time: (new Date().getTime()),
-                access_token_timeout: data.expires_in,
-                data: data
-            }))
-            .catch((err) => this.setState({error: JSON.stringify(err, null, 2), errObj: err}));
-        } else if(access_token !== "" && ((new Date().getTime()) - (access_token_time + access_token_timeout)) < 0) {
-            // Do nothing, we are logged in
-            this.setState({ notice: "You already have an access token that is valid. No need to refresh" });
-        } else if(refresh_token !== "") {
-            // Refresh access token
-            this.setState({ notice: "Refreshing access token" })
-            callNetatmo("https://api.netatmo.com/oauth2/token", {
-                grant_type: "refresh_token",
-                client_id: this.state.client_id,
-                client_secret: this.state.client_secret,
-                refresh_token: this.state.refresh_token
-            }).then((data) => this.setState({
-                access_token: data.access_token,
-                refresh_token: data.refresh_token,
-                access_token_time: (new Date().getTime()),
-                access_token_timeout: data.expires_in,
-                data: data
-            }))
-            .catch((err) => this.setState({error: JSON.stringify(err, null, 2), errObj: err}));
-        }
+                if (!access_token && !refresh_token) {
+                    // Log in with username and password
+                    this.setState({ notice: "Logging in with username and password" })
+                    callNetatmo("https://api.netatmo.com/oauth2/token", {
+                        username,
+                        password,
+                        client_id: client_id,
+                        client_secret: client_secret,
+                        grant_type: "password",
+                        scope: scope
+                    }, true).then((data) => db.ref('access').set({
+                        access_token: data.access_token,
+                        refresh_token: data.refresh_token,
+                        access_token_time: (new Date().getTime()),
+                        access_token_timeout: data.expires_in
+                    }))
+                    .catch((err) => this.setState({error: JSON.stringify(err, null, 2), errObj: err}));
+                } else if(access_token !== "" && ((new Date().getTime()) - (access_token_time + access_token_timeout)) < 0) {
+                    // Do nothing, we are logged in
+                    this.setState({ notice: "You already have an access token that is valid. No need to refresh" });
+                } else if(refresh_token) {
+                    // Refresh access token
+                    this.setState({ notice: "Refreshing access token" })
+                    callNetatmo("https://api.netatmo.com/oauth2/token", {
+                        grant_type: "refresh_token",
+                        client_id: client_id,
+                        client_secret: client_secret,
+                        refresh_token: refresh_token
+                    }).then((data) => db.ref('access').set({
+                        access_token: data.access_token,
+                        refresh_token: data.refresh_token,
+                        access_token_time: (new Date().getTime()),
+                        access_token_timeout: data.expires_in,
+                    }))
+                    .catch((err) => this.setState({error: JSON.stringify(err, null, 2), errObj: err}));
+                }
+            })
+        })
     }
 
     getStationData(event) {
-        const { access_token, device_id } = this.state;
+        db.ref('settings').once('value').then((data) => {
+            const { device_id } = data.val() || {};
+            db.ref('access').once('value').then((data) => {
+                const { access_token } = data.val() || {};
 
-        if(access_token === "") {
-            this.setState({
-                error: "You are not logged in"
+                if(access_token === "") {
+                    this.setState({
+                        error: "You are not logged in"
+                    });
+                    return;
+                }
+
+                callNetatmo("https://api.netatmo.com/api/getstationsdata", {
+                    access_token,
+                    device_id
+                }).then((data) => this.setState({ data: data, notice: "Got station data" }))
+                .catch((err) => this.setState({ error: JSON.stringify(err, null, 2), errObj: err }));
             });
-            return;
-        }
-
-        callNetatmo("https://api.netatmo.com/api/getstationsdata", {
-            access_token,
-            device_id
-        }).then((data) => this.setState({ data: data, notice: "Got station data" }))
-        .catch((err) => this.setState({ error: JSON.stringify(err, null, 2), errObj: err }));
+        });
     }
 
     render() {
