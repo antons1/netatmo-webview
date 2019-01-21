@@ -48,14 +48,29 @@ function callNetatmo(url, data, debug) {
     });
 }
 
+/**
+ * Get app settings from firebase
+ * @param {Object} prev - `prev` is merged with settings retrieved from firebase
+ * @returns Promise (object) with settings from firebase, merged with `prev`
+ */
 function getSettingsFromFirebase(prev) {
     return db.ref('settings').once('value').then((data) => Promise.resolve(Object.assign({}, prev, data.val())));
 }
 
+/**
+ * Get app access data from firebase
+ * @param {Object} prev - `prev` is merged with access data retrieved from firebase
+ * @returns Promise (object) with access data from firebase, merged with `prev`
+ */
 function getAccessTokensFromFirebase(prev) {
     return db.ref('access').once('value').then((data) => Promise.resolve(Object.assign({}, prev, data.val())));
 }
 
+/**
+ * Refreshes access token towards Netatmo with refresh token from Firebase
+ * @returns Promise with data from Netatmo
+ * @throws `NetatmoError`
+ */
 function refreshAuthenticationToken() {
     return getSettingsFromFirebase({})
         .then(getAccessTokensFromFirebase)
@@ -64,6 +79,11 @@ function refreshAuthenticationToken() {
         .catch((err) => { throw new NetatmoError('Failed refreshing access token', err) });
 }
 
+/**
+ * Determines required authentication action towards Netatmo
+ * @returns Promise eventually containing an `NetatmoSuccess` instance with `data: { method: 'PASSWORD'|'NONE'|'REFRESH', fn: <authFunction> }`
+ * @throws `NetatmoError`
+ */
 function getAuthenticationMethod() {
     return getSettingsFromFirebase({})
         .then(getAccessTokensFromFirebase)
@@ -84,6 +104,11 @@ function getAuthenticationMethod() {
         .catch((err) => { throw new NetatmoError('Something went wrong trying to assess login method', { err, settings })})
 }
 
+/**
+ * Gets available station data from Netatmo, assuming application is authenticated
+ * @returns Promise eventually containing an `NetatmoSuccess` instance with station data
+ * @throws `NetatmoError`
+ */
 function getStationData() {
     return getSettingsFromFirebase({})
         .then(getAccessTokensFromFirebase)
@@ -92,14 +117,29 @@ function getStationData() {
         .catch((err) => { throw new NetatmoError('Failed getting stations data', err) });
 }
 
+/**
+ * Authenticates toward Netatmo using username and password, stores auth tokens in firebase
+ * @param {string} username - Netatmo username
+ * @param {string} password - Netatmo password
+ * @returns Promise with success message
+ * @throws `NetatmoError`
+ */
 export function usernameAndPasswordAuthentication(username, password) {
     return getSettingsFromFirebase({})
         .then(getAccessTokensFromFirebase)
         .then((settings) => callNetatmo("https://api.netatmo.com/oauth2/token", Object.assign(settings, { username, password, grant_type: 'password' })))
-        .then((data) => new NetatmoSuccess('Signed in with username and password', data))
+        .then((data) => {
+            db.ref('access').set(data);
+            return new NetatmoSuccess('Signed in with username and password', data)
+        })
         .catch((err) => { throw new NetatmoError('Failed signing in with username and password', err) });
 }
 
+/**
+ * Loads station data from Netatmo and stores it to firebase, if auth_token or refresh_token is valid. Else throws an error
+ * @returns Promise eventually containing station data
+ * @throws NetatmoError
+ */
 export function loadData() {
     return getAuthenticationMethod()
         .then(({ data }) => {
@@ -107,4 +147,12 @@ export function loadData() {
             else return data.fn();
         })
         .then(getStationData)
+        .then((data) => {
+            const date = new Date();
+            const pathStr = `${date.getFullYear()}/${date.getMonth()+1}/${date.getDate()}/${date.getTime()}`;
+            const fbData = {};
+            fbData[pathStr] = data.data;
+            db.ref("data").update(fbData);
+            return new NetatmoSuccess('Got data, stored to firebase', data);
+        });
 }
