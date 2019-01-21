@@ -113,8 +113,52 @@ function getStationData() {
     return getSettingsFromFirebase({})
         .then(getAccessTokensFromFirebase)
         .then((settings) => callNetatmo("https://api.netatmo.com/api/getstationsdata", settings))
-        .then((data) => new NetatmoSuccess('Got station data', data))
+        .then((data) => new NetatmoSuccess('Got station data', transformStationData(data)))
         .catch((err) => { throw new NetatmoError('Failed getting stations data', err) });
+}
+
+/**
+ * Takes response from Netatmo and transform to ViewModel
+ * @param {Object} originalData - Netatmo response
+ * @returns Object containing data from Netatmo in a ViewModel shape
+ */
+function transformStationData(originalData) {
+    const device = originalData.body.devices[0];
+    const outside = originalData.body.devices[0].modules[0];
+    const newData = {
+        stationName: device.station_name,
+        reachable: device.reachable,
+        position: device.place,
+        inside: {
+            name: device.module_name,
+            co2: device.dashboard_data.CO2,
+            humidity: device.dashboard_data.Humidity,
+            noise: device.dashboard_data.Noise,
+            pressure: device.dashboard_data.Pressure,
+            absoulutePressure: device.dashboard_data.AbsolutePressure,
+            temperature: device.dashboard_data.Temperature,
+            minTemperature: device.dashboard_data.min_temp,
+            maxTemperature: device.dashboard_data.max_temp,
+            minTemperatureTime: new Date(device.dashboard_data.date_min_temp),
+            maxTemperatureTime: new Date(device.dashboard_data.date_max_temp),
+            temperatureTrend: device.dashboard_data.temp_trend,
+            pressureTrend: device.dashboard_data.pressure_trend
+        },
+        outside: {
+            name: outside.module_name,
+            temperature: outside.dashboard_data.Temperature,
+            humidity: outside.dashboard_data.Humidity,
+            minTemperature: outside.dashboard_data.min_temp,
+            maxTemperature: outside.dashboard_data.max_temp,
+            minTemperatureTime: new Date(outside.dashboard_data.date_min_temp),
+            maxTemperatureTime: new Date(outside.dashboard_data.date_max_temp),
+            temperatureTrend: outside.dashboard_data.temp_trend,
+            batteryStatus: outside.battery_percent,
+            reachable: outside.reachable
+        }
+    };
+
+    return newData;
 }
 
 /**

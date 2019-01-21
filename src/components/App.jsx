@@ -1,5 +1,6 @@
 import React, { Component } from 'react';
 
+import { db } from '../utilities/firebase';
 import { loadData as loadNetatmoData, usernameAndPasswordAuthentication as netatmoAuthenticate } from '../utilities/netatmo';
 
 class App extends Component {
@@ -10,6 +11,7 @@ class App extends Component {
         this.onChangeUn = this.onChangeUn.bind(this);
         this.loadData = this.loadData.bind(this);
         this.logIn = this.logIn.bind(this);
+        this.firebaseDataUpdated = this.firebaseDataUpdated.bind(this);
 
         this.state = {
             username: "",
@@ -21,6 +23,28 @@ class App extends Component {
             loginRequired: false,
             loginWithoutUsernameOrPasswordAttempted: false
         }
+
+        this.dbRef = null;
+        this.fetcher = null;
+    }
+
+    componentDidMount() {
+        const date = new Date();
+        const fbPath = `data/${date.getFullYear()}/${date.getMonth()+1}/${date.getDate()}`;
+        this.dbRef = db.ref(fbPath);
+        this.dbRef.limitToLast(1).on('child_added', this.firebaseDataUpdated);
+
+        //this.loadData();
+        this.fetcher = setTimeout(600000, this.loadData);
+    }
+
+    componentWillUnmount() {
+        this.dbRef.off('child_added', this.firebaseDataUpdated);
+        clearTimeout(this.fetcher);
+    }
+
+    firebaseDataUpdated(newData, prevData) {
+        this.setState({ data: newData.val() });
     }
 
     onChangePw(event) {this.setState({password: event.target.value});}
@@ -50,21 +74,12 @@ class App extends Component {
     render() {
         return (
             <div>
-                <div>Hello world!</div>
-
                 {this.state.loginRequired ? <form>
                     <input type="username" name="username" value={this.username} onChange={this.onChangeUn} /><br />
                     <input type="password" name="password" value={this.password} onChange={this.onChangePw} /><br />
                     <button type="button" onClick={this.logIn}>Logg inn!</button>
                 </form> : null}
-                <hr />
-                <button type="button" onClick={this.loadData}>Hent data!</button>
-                <hr />
-                <ObjectPrint title="App state" obj={this.state} />
-                <hr />
-                <ObjectPrint title="Received data" obj={this.state.data} />
-                <hr />
-                <ObjectPrint title="Error" obj={this.state.errObj} />
+                <Station {...this.state.data} />
             </div>
         )
     }
@@ -72,12 +87,15 @@ class App extends Component {
 
 export default App;
 
-const ObjectPrint = ({ title, obj }) =>
+const Station = ({ stationName, reachable, position, inside, outside }) =>
     <div>
-        <h3>{title}</h3>
-        {Object.keys(obj).map((key, ind) => <div key={ind}><em>{key}</em>: {typeof obj[key] === 'object' ? <ObjectData data={obj[key]} /> : <StringData data={obj[key]} />}</div>)}
-    </div>
+        <h3>{stationName}</h3>
+        <Inside {...inside} />
+    </div>;
 
-const StringData = ({ data }) => <span>{(data === "" || data) && data.toString ? data.toString() : 'Could not stringify data'}</span>;
-
-const ObjectData = ({ data }) => <pre>{JSON.stringify(data, null, 2)}</pre>
+const Inside = ({ name, co2, humidity, noise, pressure, temperature }) =>
+    <div>
+        <h4>{name}</h4>
+        Co2: {co2}<br />
+        Humidity: {humidity}
+    </div>;
