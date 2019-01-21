@@ -139,8 +139,8 @@ function transformStationData(originalData) {
             temperature: device.dashboard_data.Temperature,
             minTemperature: device.dashboard_data.min_temp,
             maxTemperature: device.dashboard_data.max_temp,
-            minTemperatureTime: new Date(device.dashboard_data.date_min_temp),
-            maxTemperatureTime: new Date(device.dashboard_data.date_max_temp),
+            minTemperatureTime: device.dashboard_data.date_min_temp,
+            maxTemperatureTime: device.dashboard_data.date_max_temp,
             temperatureTrend: device.dashboard_data.temp_trend,
             pressureTrend: device.dashboard_data.pressure_trend
         },
@@ -150,8 +150,8 @@ function transformStationData(originalData) {
             humidity: outside.dashboard_data.Humidity,
             minTemperature: outside.dashboard_data.min_temp,
             maxTemperature: outside.dashboard_data.max_temp,
-            minTemperatureTime: new Date(outside.dashboard_data.date_min_temp),
-            maxTemperatureTime: new Date(outside.dashboard_data.date_max_temp),
+            minTemperatureTime: outside.dashboard_data.date_min_temp,
+            maxTemperatureTime: outside.dashboard_data.date_max_temp,
             temperatureTrend: outside.dashboard_data.temp_trend,
             batteryStatus: outside.battery_percent,
             reachable: outside.reachable

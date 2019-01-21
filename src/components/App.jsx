@@ -1,4 +1,4 @@
-import React, { Component } from 'react';
+import React, { Component, Fragment } from 'react';
 
 import { db } from '../utilities/firebase';
 import { loadData as loadNetatmoData, usernameAndPasswordAuthentication as netatmoAuthenticate } from '../utilities/netatmo';
@@ -35,12 +35,12 @@ class App extends Component {
         this.dbRef.limitToLast(1).on('child_added', this.firebaseDataUpdated);
 
         //this.loadData();
-        this.fetcher = setTimeout(600000, this.loadData);
+        //this.fetcher = setTimeout(600000, this.loadData);
     }
 
     componentWillUnmount() {
         this.dbRef.off('child_added', this.firebaseDataUpdated);
-        clearTimeout(this.fetcher);
+        //clearTimeout(this.fetcher);
     }
 
     firebaseDataUpdated(newData, prevData) {
@@ -73,7 +73,7 @@ class App extends Component {
 
     render() {
         return (
-            <div>
+            <div className="vetatmo">
                 {this.state.loginRequired ? <form>
                     <input type="username" name="username" value={this.username} onChange={this.onChangeUn} /><br />
                     <input type="password" name="password" value={this.password} onChange={this.onChangePw} /><br />
@@ -89,13 +89,21 @@ export default App;
 
 const Station = ({ stationName, reachable, position, inside, outside }) =>
     <div>
-        <h3>{stationName}</h3>
+        <h3>{stationName} &#127969;</h3>
         <Inside {...inside} />
+        <Outside {...outside} />
     </div>;
 
 const Inside = ({ name, co2, humidity, noise, pressure, temperature }) =>
     <div>
-        <h4>{name}</h4>
+        <h4>{name} &#128022;</h4>
         Co2: {co2}<br />
+        Humidity: {humidity}
+    </div>;
+
+const Outside = ({ name, temperature, humidity, minTemperature, maxTemperature, minTemperatureTime, maxTemperatureTime }) =>
+    <div>
+        <h4>{name} &#128016;</h4>
+        Temperature: {temperature} ({minTemperature} - {maxTemperature})<br />
         Humidity: {humidity}
     </div>;
