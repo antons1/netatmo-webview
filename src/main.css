@@ -46,6 +46,26 @@
     margin-right: .5rem;
 }
 
+.sensor-data__value--very-low {
+    color: blue;
+}
+
+.sensor-data__value--low {
+    color: lightblue;
+}
+
+.sensor-data__value--normal {
+    color: green;
+}
+
+.sensor-data__value--high {
+    color: lightcoral;
+}
+
+.sensor-data__value--very-high {
+    color: red;
+}
+
 .sensor-data__unit {
     display: inline-block;
 }

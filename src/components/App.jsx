@@ -12,6 +12,7 @@ class App extends Component {
         this.loadData = this.loadData.bind(this);
         this.logIn = this.logIn.bind(this);
         this.firebaseDataUpdated = this.firebaseDataUpdated.bind(this);
+        this.dateUpdated = this.dateUpdated.bind(this);
 
         this.state = {
             username: "",
@@ -24,6 +25,9 @@ class App extends Component {
             loginWithoutUsernameOrPasswordAttempted: false
         }
 
+        this.checkNewDayRef = null;
+        this.checkNewMonthRef = null;
+        this.checkNewYearRef = null;
         this.dbRef = null;
         this.fetcher = null;
     }
@@ -34,17 +38,32 @@ class App extends Component {
         this.dbRef = db.ref(fbPath);
         this.dbRef.limitToLast(1).on('child_added', this.firebaseDataUpdated);
 
-        //this.loadData();
-        //this.fetcher = setTimeout(600000, this.loadData);
+        this.checkNewDayRef = db.ref(`data/${date.getFullYear()}/${date.getMonth()+1}`);
+        this.checkNewMonthRef = db.ref(`data/${date.getFullYear()}`);
+        this.checkNewYearRef = db.ref(`data`);
+
+        this.checkNewDayRef.limitToLast(1).on('child_added', this.dateUpdated);
+        this.checkNewMonthRef.limitToLast(1).on('child_added', this.dateUpdated);
+        this.checkNewYearRef.limitToLast(1).on('child_added', this.dateUpdated);
     }
 
     componentWillUnmount() {
         this.dbRef.off('child_added', this.firebaseDataUpdated);
-        //firebaseclearTimeout(this.fetcher);
+        this.checkNewDayRef.off(this.dateUpdated);
+        this.checkNewMonthRef.off(this.dateUpdated);
+        this.checkNewYearRef.off(this.dateUpdated);
     }
 
     firebaseDataUpdated(newData, prevData) {
         this.setState({ data: newData.val() });
+    }
+
+    dateUpdated(data) {
+        this.dbRef.off('child_added', this.firebaseDataUpdated);
+        const date = new Date();
+        const fbPath = `data/${date.getFullYear()}/${date.getMonth()+1}/${date.getDate()}`;
+        this.dbRef = db.ref(fbPath);
+        this.dbRef.limitToLast(1).on('child_added', this.firebaseDataUpdated);
     }
 
     onChangePw(event) {this.setState({password: event.target.value});}
@@ -97,18 +116,54 @@ const Station = ({ stationName, reachable, position, inside, outside }) =>
 const Inside = ({ name, co2, humidity, noise, pressure, temperature, reachable }) =>
     <div>
         <SensorTitle name={name} reachable={reachable} symbol="&#128022;" size={1} />
-        <SensorData name="Temperature" value={temperature} unit="&#176;C" />
-        <SensorData name="Humidity" value={humidity} unit="%" />
-        <SensorData name="Noise" value={noise} unit="dB" />
-        <SensorData name="Pressure" value={pressure} unit="hpa" />
-        <SensorData name="CO2" value={co2} unit="ppm" />
+        <SensorData name="Temperature" value={temperature} unit="&#176;C" levelDefinitions={[
+            { level: 0, low: null, high: 10 },
+            { level: 1, low: 16, high: 19 },
+            { level: 2, low: 20, high: 23 },
+            { level: 3, low: 24, high: 29 },
+            { level: 4, low: 30, high: null },
+        ]}/>
+        <SensorData name="Humidity" value={humidity} unit="%" levelDefinitions={[
+            { level: 0, low: null, high: 10 },
+            { level: 2, low: 11, high: 89 },
+            { level: 4, low: 90, high: null },
+        ]}/>
+        <SensorData name="Noise" value={noise} unit="dB" levelDefinitions={[
+            { level: 2, low: null, high: 84 },
+            { level: 3, low: 85, high: 109 },
+            { level: 4, low: 110, high: null },
+        ]}/>
+        <SensorData name="Pressure" value={pressure} unit="hpa" levelDefinitions={[
+            { level: 0, low: null, high: 800 },
+            { level: 1, low: 801, high: 950 },
+            { level: 2, low: 951, high: 1050 },
+            { level: 3, low: 1051, high: 1150 },
+            { level: 4, low: 1151, high: null },
+        ]}/>
+        <SensorData name="CO2" value={co2} unit="ppm" levelDefinitions={[
+            { level: 0, low: null, high: 100 },
+            { level: 1, low: 101, high: 200 },
+            { level: 2, low: 201, high: 800 },
+            { level: 3, low: 801, high: 1500 },
+            { level: 4, low: 1501, high: null },
+        ]}/>
     </div>;
 
 const Outside = ({ name, temperature, humidity, minTemperature, maxTemperature, minTemperatureTime, maxTemperatureTime, reachable }) =>
     <div>
         <SensorTitle name={name} reachable={reachable} symbol="&#128016;" size={1} />
-        <SensorData name="Temperature" value={temperature} unit="&#176;C" />
-        <SensorData name="Humidity" value={humidity} unit="%" />
+        <SensorData name="Temperature" value={temperature} unit="&#176;C" levelDefinitions={[
+            { level: 0, low: null, high: -6 },
+            { level: 1, low: -5, high: 9 },
+            { level: 2, low: 10, high: 20 },
+            { level: 3, low: 21, high: 30 },
+            { level: 4, low: 31, high: null },
+        ]}/>
+        <SensorData name="Humidity" value={humidity} unit="%" levelDefinitions={[
+            { level: 0, low: null, high: 10 },
+            { level: 2, low: 11, high: 89 },
+            { level: 4, low: 90, high: null },
+        ]}/>
     </div>;
 
 const StatusLight = ({ reachable }) => <span className={`status-light ${reachable ? 'status-light--reachable' : 'status-light--unreachable'}`}></span>
@@ -120,12 +175,33 @@ const SensorTitle = ({ name, reachable, symbol, size }) =>
         <StatusLight reachable={reachable} />
     </div>
 
-const SensorData = ({ name, unit, value, level, trend}) =>
-    <div className="sensor-data">
-        <h5 className="sensor-data__name">{name}</h5>
-        <div className="sensor-data__value-wrapper">
-            <div className="sensor-data__value">{value}</div>
-            <div className="sensor-data__unit">{unit}</div>
+/* Level:
+ *  0 - Very low
+ *  1 - Low
+ *  2 - Normal
+ *  3 - High
+ *  4 - Very High
+*/
+const SensorData = ({ name, unit, value, trend, levelDefinitions}) => {
+    const level = levelDefinitions ? levelDefinitions.find((definition) => (definition.low === null || value >= definition.low) && (definition.high === null || value <= definition.high)) : { level: 2 };
+    
+    return (
+        <div className="sensor-data">
+            <h5 className="sensor-data__name">{name}</h5>
+            <div className="sensor-data__value-wrapper">
+                <div className={"sensor-data__value sensor-data__value--" + ((level) => {
+                    switch(level ? level.level : 2) {
+                        case 0: return "very-low";
+                        case 1: return "low";
+                        default:
+                        case 2: return "normal";
+                        case 3: return "high";
+                        case 4: return "very-high";
+                    }
+                })(level)}>{value}</div>
+                <div className="sensor-data__unit">{unit}</div>
+            </div>
+            {trend ? <div className="sensor-data__trend">{trend}</div> : null}
         </div>
-        {trend ? <div className="sensor-data__trend">{trend}</div> : null}
-    </div>
+    );
+}
